@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dynamic Nomogram (Logistic Model)</title>
+  <style>
+    /* =====================
+       Light Theme Tokens
+       ===================== */
+    :root{
+      --bg:#f9fafb;           /* page background */
+      --panel:#ffffff;         /* card background */
+      --muted:#6b7280;         /* gray-500 */
+      --text:#111827;          /* gray-900 */
+      --sub:#1f2937;           /* gray-800 */
+      --line:#e5e7eb;          /* gray-200 */
+      --shadow:0 6px 18px rgba(0,0,0,.06);
+      --acc:#2563eb;           /* blue-600 */
+      --red:#dc2626;           /* red-600  */
+      --blue:#2563eb;          /* blue-600 */
+      --green:#16a34a;         /* green-600 */
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+    .wrap{max-width:1180px;margin:28px auto;padding:0 16px}
+    h1{font-size:26px;margin:0 0 6px;color:var(--sub);letter-spacing:.2px}
+    .lead{color:var(--muted);margin-bottom:18px}
+
+    /* Layout */
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:16px}
+    @media (max-width: 920px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+    .card h2{font-size:16px;color:var(--sub);margin:6px 0 10px}
+
+    /* Form controls */
+    .row{display:flex;align-items:center;gap:10px;margin:10px 0}
+    .row label{flex:0 0 170px;color:var(--sub)}
+    .row input[type="number"], .row select{
+      flex:1 1 auto;min-width:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 10px;color:var(--text)}
+    .row input[type="range"]{flex:1;margin-left:0}
+
+    .btn{background:var(--acc);border:none;color:#fff;border-radius:10px;padding:9px 12px;font-weight:600;cursor:pointer}
+    .btn.secondary{background:#eef2ff;color:#1e40af;border:1px solid #c7d2fe}
+
+    .stack{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* Stats */
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width: 680px){.grid2{grid-template-columns:1fr}}
+    .stat{background:#fafafa;border:1px solid var(--line);border-radius:12px;padding:12px}
+    .stat .label{color:var(--muted);font-weight:600}
+    .stat .big{font-size:24px;font-weight:800;margin-top:2px}
+
+    .list{display:grid;gap:8px;margin-top:8px}
+    .chip{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+
+    .bar{height:10px;width:42%;border-radius:6px;background:#eef2f7;overflow:hidden}
+    .bar>i{display:block;height:100%}
+
+    .note{color:var(--muted);font-size:13px}
+    .hint{display:inline-block;padding:2px 8px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--muted)}
+
+    .divider{height:1px;background:var(--line);margin:14px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Dynamic Nomogram (Logistic Model, Client‑Side Only)</h1>
+    <div class="lead">Set model coefficients and value ranges, then interactively compute <span class="hint">LP</span>, <span class="hint">Total Points</span>, and <span class="hint">Predicted Risk</span>. Config import/export is supported.</div>
+
+    <div class="grid" id="app">
+      <!-- LEFT: model configuration -->
+      <section class="card" aria-label="Model configuration">
+        <h2>1) Model Coefficients</h2>
+        <div class="note" style="margin:-4px 0 10px">Paste values from R (e.g., <span class="mono">coef(fit)</span>). Reference levels have zero effect: <span class="mono">treatment_regimens=1</span>, <span class="mono">M_stage=0</span>, <span class="mono">treatment_line=1</span>.</div>
+        <div class="row"><label>Intercept</label><input type="number" step="0.0001" id="b0" /></div>
+        <div class="row"><label>β<sub>RadScore</sub></label><input type="number" step="0.0001" id="b_rad" /></div>
+        <div class="row"><label>β<sub>tumor_longest_diameter</sub></label><input type="number" step="0.0001" id="b_tum" /></div>
+        <div class="row"><label>β <span class="mono">treatment_regimens=2</span></label><input type="number" step="0.0001" id="b_tr2" /></div>
+        <div class="row"><label>β <span class="mono">treatment_regimens=3</span></label><input type="number" step="0.0001" id="b_tr3" /></div>
+        <div class="row"><label>β <span class="mono">treatment_regimens=4</span></label><input type="number" step="0.0001" id="b_tr4" /></div>
+        <div class="row"><label>β <span class="mono">M_stage=1</span></label><input type="number" step="0.0001" id="b_ms1" /></div>
+        <div class="row"><label>β <span class="mono">treatment_line=2</span></label><input type="number" step="0.0001" id="b_tl2" /></div>
+
+        <div class="divider"></div>
+        <h2>2) Ranges (for sliders)</h2>
+        <div class="row"><label>RadScore Range</label>
+          <input type="number" step="0.01" id="rad_min" style="width:100px">–
+          <input type="number" step="0.01" id="rad_max" style="width:100px">
+        </div>
+        <div class="row"><label>Tumor Longest Diameter</label>
+          <input type="number" id="tum_min" style="width:100px">–
+          <input type="number" id="tum_max" style="width:100px">
+        </div>
+
+        <div class="divider"></div>
+        <div class="stack">
+          <button class="btn" id="btnExport" title="Download JSON config">Export Config</button>
+          <label class="btn secondary" for="fileImport">Import Config</label>
+          <input id="fileImport" type="file" accept="application/json" style="display:none">
+          <button class="btn secondary" id="btnReset">Reset to Demo</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: interactive prediction -->
+      <section class="card" aria-label="Interactive prediction">
+        <h2>3) Patient Inputs</h2>
+        <div class="row"><label>RadScore</label>
+          <input type="range" id="rad" min="-2" max="8" step="0.01">
+          <input type="number" id="rad_box" step="0.01" style="width:120px">
+        </div>
+        <div class="row"><label>Tumor Longest Diameter</label>
+          <input type="range" id="tum" min="0" max="160" step="1">
+          <input type="number" id="tum_box" step="1" style="width:120px">
+        </div>
+        <div class="row"><label>Treatment Regimens</label>
+          <select id="tr"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+        </div>
+        <div class="row"><label>M_stage</label>
+          <select id="ms"><option value="0">0</option><option value="1">1</option></select>
+        </div>
+        <div class="row"><label>Treatment Line</label>
+          <select id="tl"><option value="1">1</option><option value="2">2</option></select>
+        </div>
+
+        <div class="divider"></div>
+        <h2>4) Outputs</h2>
+        <div class="grid2">
+          <div class="stat"><div class="label">Linear Predictor (LP)</div><div class="big mono" id="lp">0.0000</div></div>
+          <div class="stat"><div class="label">Predicted Risk</div><div class="big mono" id="risk">0.0000</div></div>
+          <div class="stat"><div class="label">Total Points (0–300)</div><div class="big mono" id="pts">0.0</div></div>
+          <div class="stat">
+            <div class="label">Contributions on LP Scale</div>
+            <div class="list" id="contrib"></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <h2>5) Notes</h2>
+        <p class="note">LP = β<sub>0</sub> + β<sub>RadScore</sub>·RadScore + β<sub>tumor</sub>·tumor_longest_diameter + Σ(level coefficients). Risk = 1/(1 + exp(−LP)). Total Points linearly rescales LP to 0–300 to mimic a nomogram point ruler.</p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // ===================== DEMO COEFFICIENTS =====================
+    const demo = {
+      b0: 0.0,
+      b_rad: 1.566,
+      b_tum: 0.199,
+      b_tr2: -0.306,
+      b_tr3: 0.294,
+      b_tr4: 0.385,
+      b_ms1: 0.293,
+      b_tl2: -2.047,
+      rad_min: -2.0, rad_max: 8.0,
+      tum_min: 0,    tum_max: 160
+    };
+
+    // ===================== ELEMENTS =====================
+    const els = {
+      // Coefs
+      b0:  document.getElementById('b0'),
+      b_rad:document.getElementById('b_rad'),
+      b_tum:document.getElementById('b_tum'),
+      b_tr2:document.getElementById('b_tr2'),
+      b_tr3:document.getElementById('b_tr3'),
+      b_tr4:document.getElementById('b_tr4'),
+      b_ms1:document.getElementById('b_ms1'),
+      b_tl2:document.getElementById('b_tl2'),
+      // Ranges
+      rad_min:document.getElementById('rad_min'),
+      rad_max:document.getElementById('rad_max'),
+      tum_min:document.getElementById('tum_min'),
+      tum_max:document.getElementById('tum_max'),
+      // Inputs
+      rad:document.getElementById('rad'), rad_box:document.getElementById('rad_box'),
+      tum:document.getElementById('tum'), tum_box:document.getElementById('tum_box'),
+      tr:document.getElementById('tr'), ms:document.getElementById('ms'), tl:document.getElementById('tl'),
+      // Outputs
+      lp:document.getElementById('lp'), risk:document.getElementById('risk'), pts:document.getElementById('pts'),
+      contrib:document.getElementById('contrib'),
+      // Actions
+      fileImport:document.getElementById('fileImport'), btnExport:document.getElementById('btnExport'), btnReset:document.getElementById('btnReset'),
+    };
+
+    // ===================== HELPERS =====================
+    const sigmoid = x => 1/(1+Math.exp(-x));
+    const toFixed = (x,n) => (+x).toFixed(n);
+
+    // Map LP to 0–300 points (visual only)
+    function pointsFromLP(lp){
+      const lmin = -6, lmax = 6; // adjust if your LP range is wider
+      const t = (lp - lmin) / (lmax - lmin);
+      return Math.max(0, Math.min(300, t*300));
+    }
+
+    function getCoef(){
+      return {
+        b0: +els.b0.value,
+        b_rad: +els.b_rad.value,
+        b_tum: +els.b_tum.value,
+        b_tr2: +els.b_tr2.value,
+        b_tr3: +els.b_tr3.value,
+        b_tr4: +els.b_tr4.value,
+        b_ms1: +els.b_ms1.value,
+        b_tl2: +els.b_tl2.value,
+      };
+    }
+
+    // ===================== CORE COMPUTE =====================
+    function compute(){
+      const c = getCoef();
+      const x = {
+        rad: +els.rad.value,
+        tum: +els.tum.value,
+        tr:  els.tr.value,
+        ms:  els.ms.value,
+        tl:  els.tl.value,
+      };
+      let lp = c.b0 + c.b_rad*x.rad + c.b_tum*x.tum;
+      const contr = [
+        {name:'Intercept', v:c.b0},
+        {name:'RadScore', v:c.b_rad*x.rad},
+        {name:'tumor_longest_diameter', v:c.b_tum*x.tum},
+      ];
+      if(x.tr==='2'){ lp += c.b_tr2; contr.push({name:'treatment_regimens=2', v:c.b_tr2}); }
+      else if(x.tr==='3'){ lp += c.b_tr3; contr.push({name:'treatment_regimens=3', v:c.b_tr3}); }
+      else if(x.tr==='4'){ lp += c.b_tr4; contr.push({name:'treatment_regimens=4', v:c.b_tr4}); }
+      else { contr.push({name:'treatment_regimens=1', v:0}); }
+
+      if(x.ms==='1'){ lp += c.b_ms1; contr.push({name:'M_stage=1', v:c.b_ms1}); } else { contr.push({name:'M_stage=0', v:0}); }
+      if(x.tl==='2'){ lp += c.b_tl2; contr.push({name:'treatment_line=2', v:c.b_tl2}); } else { contr.push({name:'treatment_line=1', v:0}); }
+
+      const risk = sigmoid(lp);
+      els.lp.textContent   = toFixed(lp,4);
+      els.risk.textContent = toFixed(risk,4);
+      els.pts.textContent  = toFixed(pointsFromLP(lp),1);
+
+      // Render contributions
+      els.contrib.innerHTML = '';
+      const maxAbs = Math.max(0.001, ...contr.map(d=>Math.abs(d.v)));
+      contr.forEach(d=>{
+        const row = document.createElement('div'); row.className='chip';
+        const name = document.createElement('div'); name.textContent = d.name; name.style.color = '#111827';
+        const val  = document.createElement('div'); val.className='mono'; val.textContent = toFixed(d.v,4);
+        const bar  = document.createElement('div'); bar.className='bar';
+        const fill = document.createElement('i'); fill.style.width = (Math.min(1,Math.abs(d.v)/maxAbs)*100)+'%'; fill.style.background = d.v>=0? 'var(--red)':'var(--blue)';
+        bar.appendChild(fill);
+        const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center'; right.style.gap='10px'; right.append(bar,val);
+        row.append(name,right); els.contrib.appendChild(row);
+      });
+    }
+
+    // ===================== RANGES & BINDINGS =====================
+    function syncRanges(){
+      els.rad.min = els.rad_min.value; els.rad.max = els.rad_max.value; els.rad_box.min = els.rad.min; els.rad_box.max = els.rad.max;
+      els.tum.min = els.tum_min.value; els.tum.max = els.tum_max.value; els.tum_box.min = els.tum.min; els.tum_box.max = els.tum.max;
+      if(+els.rad.value < +els.rad.min) els.rad.value = els.rad.min;
+      if(+els.rad.value > +els.rad.max) els.rad.value = els.rad.max;
+      if(+els.tum.value < +els.tum.min) els.tum.value = els.tum.min;
+      if(+els.tum.value > +els.tum.max) els.tum.value = els.tum.max;
+      els.rad_box.value = els.rad.value; els.tum_box.value = els.tum.value;
+      compute();
+    }
+
+    function bind(){
+      // sync slider & number
+      els.rad.addEventListener('input', ()=>{ els.rad_box.value = els.rad.value; compute(); });
+      els.rad_box.addEventListener('input', ()=>{ els.rad.value = els.rad_box.value; compute(); });
+      els.tum.addEventListener('input', ()=>{ els.tum_box.value = els.tum.value; compute(); });
+      els.tum_box.addEventListener('input', ()=>{ els.tum.value = els.tum_box.value; compute(); });
+      ['tr','ms','tl','b0','b_rad','b_tum','b_tr2','b_tr3','b_tr4','b_ms1','b_tl2'].forEach(id=>{
+        document.getElementById(id).addEventListener('input', compute);
+      });
+      ['rad_min','rad_max','tum_min','tum_max'].forEach(id=>{
+        document.getElementById(id).addEventListener('change', syncRanges);
+      });
+      // Export config
+      els.btnExport.addEventListener('click', ()=>{
+        const cfg = { ...getCoef(), rad_min:+els.rad.min, rad_max:+els.rad.max, tum_min:+els.tum.min, tum_max:+els.tum.max };
+        const blob = new Blob([JSON.stringify(cfg,null,2)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'nomogram_config.json'; a.click(); URL.revokeObjectURL(a.href);
+      });
+      // Import config
+      els.fileImport.addEventListener('change', (e)=>{
+        const f = e.target.files[0]; if(!f) return; const r = new FileReader();
+        r.onload = ()=>{
+          try{
+            const j = JSON.parse(r.result);
+            ['b0','b_rad','b_tum','b_tr2','b_tr3','b_tr4','b_ms1','b_tl2'].forEach(k=> els[k].value = j[k] ?? 0);
+            els.rad_min.value = j.rad_min ?? demo.rad_min; els.rad_max.value = j.rad_max ?? demo.rad_max;
+            els.tum_min.value = j.tum_min ?? demo.tum_min; els.tum_max.value = j.tum_max ?? demo.tum_max;
+            syncRanges();
+          }catch(err){ alert('Failed to parse JSON'); }
+        };
+        r.readAsText(f);
+      });
+      // Reset to demo
+      els.btnReset.addEventListener('click', applyDemo);
+    }
+
+    function applyDemo(){
+      Object.entries(demo).forEach(([k,v])=>{ if(els[k]) els[k].value = v; });
+      els.rad.value = (demo.rad_min + demo.rad_max)/2; els.rad_box.value = els.rad.value;
+      els.tum.value = Math.round((demo.tum_min + demo.tum_max)/2); els.tum_box.value = els.tum.value;
+      syncRanges();
+    }
+
+    bind();
+    applyDemo();
+  </script>
+</body>
+</html>
